@@ -1,7 +1,7 @@
-===
-Week2_class.Rmd
-Requires: quantmod, fma, forecast, fpp
-===
+---
+title: "Week 2: Class Exercise on Stationarity & Seasonality"
+output: html_document
+---
 
 
 ```{r}
