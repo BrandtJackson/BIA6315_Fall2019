@@ -24,12 +24,12 @@ mean(ciscots)
 #Creating new variables 
 
 # Four moments of a normal distribution:
-First moment: Mean 
-Second moment: Variance
-Third moment: Skewness
-Fourth moment: Kurtosis
+-First moment: Mean   
+-Second moment: Variance  
+-Third moment: Skewness  
+-Fourth moment: Kurtosis  
 
-The goal is to determine whether the Cisco's daily rate of returns come from a normal distribution.
+Is Cisco's daily rate of returns come from a normal distribution?
  
 Looking at the histogram & time series plot, what do you see?
 
@@ -42,6 +42,7 @@ hist(log.ciscots) #any difference?
 plot(log.ciscots) #any difference?
 mean(log.ciscots)
 ```
+Another problem: If the processes that give rise to the Cisco time series change over time, we cannot "model" these processes? Hence, can we do something about the trend?
 
 What about taking the day-to-day difference in log price? 
 
