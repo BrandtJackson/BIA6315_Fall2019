@@ -1,0 +1,69 @@
+underlying structure is time
+forecasting is different from prediction. The idea of understand what is going to happen based on time. Time is the underlying structure.
+The further out in time, the more uncertainty
+
+Narrow cone of uncertainty at first. A wider cone of uncertainty.
+We're good at predicting the next 12 hours. 3-4 days are harder.
+
+Good forecasters bring in multiple models (3-4 models). Bring them together to create an ensemble.
+I built 6 models. 4 out of 6 models show that the hurricane is heading this way.
+We can generate multiple models.
+
+Base R allows you to create a TS object (a time series object)
+
+A time series is organized by some measure of time. The construct is month & year.
+class? 
+
+Base R handles this very basic time series. If it's more advanced, how far can I drill down? 
+-consistent (regular) intervals
+
+Quality Assurance ==> Your intervals are different based on the time of the day, etc.
+
+Time Series EDA
+-first EDA is a simple time series plot. There's so much to learn about the underlying time sequence. 
+What are some things you see? 
+1) Is there a trend?
+2) The series seems to be repeating itself. There's seasonality
+Seasonality that is trending!!
+3) The variance is getting bigger and bigger. My peaks are getting higher; My valleys are getting bigger too.
+Nonconstant variance
+4)Do I have a cyclical nature? Let's take a look at the US business cycle. 
+
+What is no trend? I draw a line through it and it's a straight line with mean = 0
+
+If I can find all the underlying time structures, then I can predict with some level of certainty what will happen.
+
+What are the patterns embedded in this time series? If I can identify these regularities, then I can predict!
+
+What I just did to the time series is to "decompose" it?
+What portion is trend?
+What portion is seasonality?
+What portion is cylical?
+What about random? (white noise; not reducible)
+
+
+
+Four basic forecasting methods:
+-Average/Mean
+-Naive ==> Miss out on seasonality/trend/cyclical
+-Seasonal Naive ==> Replicate the seasonality in the last year ==> Miss out on trend/cyclical
+-Drift ==> Allow the forecast to increase or decrease over time, where the amount of change over time (drift) is set to be
+the average change seen in historical data. Essentially drawing a line between the first and last observation and letting it "drift" forward.
+
+
+
+#Zoo objects
+lag --> using yesterday's value to set as today's value (This is the Naive method)
+Finding a lagged structure
+Because what is happening today is contigent on what happened yesterday!
+
+
+
+Confidence intervals:
+80% chance that the actual value is within this band
+95% chance with the actual value is within this band
+
+
+
+
+

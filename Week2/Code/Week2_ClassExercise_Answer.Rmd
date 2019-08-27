@@ -1,0 +1,166 @@
+===
+Week2_class.Rmd
+Requires: quantmod, fma, forecast, fpp
+===
+
+
+```{r}
+library(quantmod)
+getSymbols("DJIA", src = "FRED",auto.assign=TRUE)  #-- takes ticker names and pulls data from FRED
+#default is 10 years back
+class(DJIA)
+head(DJIA)
+tail(DJIA)
+class(DJIA) #notice it's a xts and zoo object
+
+head(DJIA, 100) #Can you spot the NAs?
+```
+Now we want to reformat this daily data - we still want a time series but we want to get rid of weekends and holidays
+
+```{r}
+library(zoo)
+temp <- zoo(na.omit(DJIA))
+mydj <- zoo(temp[1:length(temp)])
+class(mydj)
+head(mydj)
+tail(mydj)
+plot(mydj, main = "Dow Jones Industrial average \n 27 Aug 2009 - 26 Aug 2019", ylab = "Index")
+
+```
+
+There is too much going on here - we will limit the series to the last year which is about 250 trading days
+
+```{r}
+tail(mydj, 250) #find out the start date for series
+
+mydj.short <- window(mydj, start = as.Date("2018-08-24")) #note the indexes - you can change this if you want
+
+plot(mydj.short, main = "Dow Jones Industrial average \n 250 trading days ending 26 Aug 2019",  ylab = "Index")
+
+mydj.short.coredata <- coredata(mydj.short)
+```
+
+Can you examine the moments of this time series? Feel free to use plots & statistical tests.
+
+
+Should we detrend the series?
+```{r}
+#create the change in the DJ 
+diff_mydj <- diff(mydj.short)
+plot(diff_mydj, main = "Change in daily Dow Jones Industrial average \n 250 trading days ending 26 Aug 2019", ylab = "Change in index")
+abline(a=0,b=0, col = "red")
+```
+
+
+Okay, data munging and initial charting done.  Is this series white noise?  We'll look at a picture and calculate a Ljung Box statistic which requires that we choose lag length (h) to test. 
+
+How do you choose h? FPP suggests h=10 for non-seasonal data, and h=2*m for seasonal data.  Hyndman describes his reasoning here: 
+http://robjhyndman.com/hyndsight/ljung-box-test/
+
+There are other arguments for other choices.  For example, see
+http://stats.stackexchange.com/questions/6455/how-many-lags-to-use-in-the-ljung-box-test-of-a-time-series
+
+```{r}
+acf(coredata(diff_mydj), plot=T) #note that the acf function only work with core data (i.e. no time index).
+
+#now calculate the test statistic
+Box.test(diff_mydj, lag=10, fitdf=0, type="Lj")
+```
+So, is this white noise?  Remember we are dealing with a null hypothesis of no serial correlation.  If we get a pvalue greater than our threshhold (say 5% for 95% confidence), then we fail to reject the null.  
+
+
+Now: more on time series decomposition from week 1.  The R commands are very simple.  Here are the ones used to generate the charts in the slides:
+
+```{r}
+library(fpp2) #this is the package for the textbook
+#hsales data set is in fpp2 package
+library(forecast)
+seasonplot(window(hsales,start = 1985), year.labels = TRUE, col = 1:10, main = "Seasonal plots of home sales") #narrower window
+plot(decompose(hsales)) #data set is from package
+plot(stl(hsales,s.window="periodic"))
+```
+
+Similar but different calculations. 
+You can pull the pieces out of the decomposition process
+
+```{r}
+hsales.decomp <- decompose(hsales)
+plot(hsales.decomp$seasonal, main = "Home sales seasonal pattern")
+plot(hsales.decomp$trend, main = "Home sales trend pattern")
+```
+
+#Unemployment Rate Example
+
+Now we will decompose the unemployment rate.
+
+Get data from FRED.  Note the convoluted way that the time series item is created.  The stl package requires a particular shape to the time series that doesn't always result from the ts command. Note the differences in the dimensions and the description in the "Environment" window.
+
+```{r}
+urates <- c("UNRATENSA", "UNRATE")
+getSymbols(urates, src="FRED")  #-- takes ticker names and pulls data from FRED
+start(UNRATENSA)
+end(UNRATENSA)
+class(UNRATENSA)
+#suggestions for improving the 2 step process of creating a time series element with the correct dimensions are welcome
+
+#first series
+temp <- ts(UNRATENSA)
+dim(temp)
+ur.nsa <- ts(temp[1:823], start = c(1948,1), end = c(1948, length(UNRATENSA)),frequency = 12)
+dim(ur.nsa)
+
+#second series
+temp <- ts(UNRATE)
+ur<- ts(temp, start = c(1948,1), end = c(1948, length(UNRATE)), frequency = 12)
+
+plot(ur, main = "Full unemployment rate from FRED")
+
+```
+
+We are only going to work with the last 10 years. Note one retains the seansonailty and other other is "deseasonized (adjusted)"
+
+```{r}
+ur.nsa.short <- window(ur.nsa, start = 2006)
+ur.short <- window(ur, start = 2006)
+
+plot(ur.nsa.short, ylab = "Percent", main = "Civilian unemployment rate")
+lines(ur.short, col = "blue")
+legend("topleft", legend=c("Unadjusted","Adjusted"), col=c("black","blue"), lty = 1)
+```
+
+Now to compare the decomposition.  Note: you cannot pass a title to the plot from decompose command without writing a convoluted wrapper function which is too painful for me. 
+
+```{r}
+plot(decompose(ur.nsa.short))
+plot(stl(ur.nsa.short, s.window = "periodic"))
+```
+
+Let's compare the seasonal calculations:
+
+```{r}
+ur.nsa.decomp <- decompose(ur.nsa.short)
+ur.nsa.stl <- stl(ur.nsa.short, s.window = "periodic")
+
+plot(ur.nsa.decomp$seasonal, main = "Unemployment seasonal pattern")
+lines(ur.nsa.stl$time.series[,1], col = "blue")
+```
+
+We can also use the seasadj command to take either of these seasonal factors and adjust the unadjusted rate.  How does that compare to the published rate?
+```{r}
+#decomposition first, then adjustment
+fit <- stl(ur.nsa.short,s.window=15)
+ur.nsa.short.sa <- seasadj(fit)
+
+#let's see the results
+
+plot(ur.nsa.short, col="gray", ylab = "Percent", main = "Adjusting unemployment")
+fit <- stl(ur.nsa.short,s.window=15)
+ur.nsa.short.sa <- seasadj(fit)
+lines(ur.nsa.short.sa, col="red")
+lines(ur.short, col = "blue")
+legend("topright", legend=c("Unadjusted","R-adjusted","Published adj"), col=c("grey", "red", "blue"), lty = c(1,1,1))
+```
+
+
+
+

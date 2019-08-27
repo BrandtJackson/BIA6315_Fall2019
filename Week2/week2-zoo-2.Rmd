@@ -1,0 +1,145 @@
+---
+title: "Dissecting a Time Series"
+output: html_document
+---
+
+# Time Series using ZOO
+
+```{r}
+library(tseries)
+library(zoo)
+
+#import dataset into a dataframe
+cisco = read.table('C:/Users/Xuan Pham/Dropbox/Fall_2019/BIA6315/code/Week 2/Data/cisco_00-10.csv', header=T, sep=',')
+
+# create time series for cisco prices
+ciscots = zoo(cisco$Price, as.Date(as.character(cisco$Date), format = "%m/%d/%y"))
+
+
+plot(ciscots)
+hist(ciscots)
+mean(ciscots)
+```
+
+#Creating new variables 
+
+# Four moments of a normal distribution:
+First moment: Mean 
+Second moment: Variance
+Third moment: Skewness
+Fourth moment: Kurtosis
+
+The goal is to determine whether the Cisco's daily rate of returns come from a normal distribution.
+ 
+Looking at the histogram & time series plot, what do you see?
+
+```{r} 
+#Natural log transformation makes the distribution less skewed.
+#DEFINE LOG RETURNS
+#rts is a time series object since it is created from a TS object
+log.ciscots = log(ciscots)
+hist(log.ciscots) #any difference?
+plot(log.ciscots) #any difference?
+mean(log.ciscots)
+```
+
+What about taking the day-to-day difference in log price? 
+
+```{r }
+#first the hard way of doing it...
+lagged.ciscots <- lag(log.ciscots, k=-1)
+price.diff <- (log.ciscots - lagged.ciscots)
+head(price.diff)
+
+#now the easier way...
+rts = diff(log.ciscots, lag=1) #default is lag = 1
+head(rts)
+hist(rts) #any difference?
+plot(rts) #any difference?
+mean(rts)
+```
+
+This is called "de-trending" our time series. The mean is now close to 0.
+
+
+```{r}
+rt <- coredata(rts) #keeping just the price data. No time index.
+library(fBasics)
+                     
+# COMPUTE SUMMARY STATISTICS
+basicStats(rt) 
+           
+# CREATE HISTOGRAM 
+# OPTIONAL creates 2 by 2 display for 4 plots 
+# par(mfcol=c(2,2)) 
+hist(rt, xlab="Cisco log returns", prob=TRUE, main="Histogram") 
+# add approximating normal density curve 
+xfit<-seq(min(rt),max(rt),length=60) 
+yfit<-dnorm(xfit,mean=mean(rt),sd=sd(rt)) 
+lines(xfit, yfit, col="blue", lwd=2) 
+```
+
+Is there skewness?
+What about kurtosis?
+
+```{r}
+# CREATE NORMAL PROBABILITY PLOT 
+qqnorm(rt) 
+qqline(rt, col = 2) 
+plot(rt)
+```
+
+
+```{r}
+library(moments)
+skewness(rt)
+kurtosis(rt)
+
+# NORMALITY TESTS 
+# Perform Jarque-Bera normality test. 
+#H0: Data is normally distributed
+#H1: Data is not normally distributed
+normalTest(rt,method=c("jb")) 
+#If you want to see the critical values for chi-square distribution, check here:
+#https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm
+```
+So the Cisco price data set is not normally distributed. 
+
+Now let's turn our attention to the "independent, identically distributed" assumption.
+
+Independent: Each sample observation is uncorrelated with another sample observation.
+Identically distributed: The sample observations are drawn from the same probability distribution.
+
+It's obvious that time series violates this assumption.
+
+How do we examine this?
+
+In traditional statistics, we have covariance & correlation to examine the linear relationship between two variables, X & Y.
+
+Covariance: Direction of the relationship
+Correlation: Direction & strength of the relationship
+
+In time series analysis, we change X & Y into Y(t) and Y(t-k) where k = some number of lagged periods. Hence, we have autocovariance and autocorrelation.
+
+```{r}
+# COMPUTE ACF AND PLOT CORRELOGRAM 
+#prints acf values to console 
+acf(rt, plot=F) 
+#plot acf values on graph (correlogram) 
+acf(rt, plot=T) 
+```
+
+Is there a hypothesis test we can run to test for autocorrelation? 
+
+```{r}
+# COMPUTE LJUNG-BOX TEST FOR WHITE NOISE (NO AUTOCORRELATION)
+#H0: p(1) = p(2) = p(k) = 0
+#H1: p(k) is not equal to 0
+# to Lag 6 
+Box.test(rts,lag=6,type='Ljung') 
+# to Lag 12 
+Box.test(rts,lag=12,type='Ljung') 
+                     
+```
+
+
