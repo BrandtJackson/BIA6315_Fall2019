@@ -1,0 +1,315 @@
+---
+title: 'Week 3: Smoothing, Part 1'
+author: "Xuan Pham"
+date: "9/3/2019"
+output: html_document
+---
+
+# Time Series Components
+
+```{r elecequip}
+library(fpp2)
+#?elecequip Always look up a preloaded data set to learn more!
+autoplot(elecequip) + xlab("Year") + ylab("Index") +
+  ggtitle("Electrical Equipment Manufacturing Index (Euro Area) \n Index = 100 in 2015")
+```
+
+First, some EDA...
+
+Step 1: Viewing the time series
+```{r eda1}
+hist(elecequip)
+
+library(fBasics)
+basicStats(elecequip)
+
+library(forecast)
+seasonplot(window(elecequip,start = 2005), year.labels = TRUE, col = 1:10, main = "Seasonal plots of electrical equipment manufacturing") #start at base year of index.
+
+library(xts)
+elecequip_xts <- as.xts(elecequip)
+last(elecequip_xts, '2 years')
+plot(last(elecequip_xts, '2 years'))
+```
+Side Note: Here's the xts cheat sheet from DataCamp:  https://www.datacamp.com/community/blog/r-xts-cheat-sheet.
+
+Step 2: Four moments  
+
+```{r eda2}
+library(moments)
+
+hist(elecequip, xlab="Electrical Equipment Manufacturing", prob=TRUE, main="Histogram") 
+xfit<-seq(min(elecequip),max(elecequip), length=192) 
+yfit<-dnorm(xfit,mean=mean(elecequip),sd=sd(elecequip)) 
+lines(xfit, yfit, col="blue", lwd=1) 
+
+qqnorm(elecequip) 
+qqline(elecequip, col = 2) 
+skewness(elecequip) 
+kurtosis(elecequip)
+
+# NORMALITY TESTS 
+# Perform Jarque-Bera normality test. 
+#H0: Data is normally distributed
+#H1: Data is not normally distributed
+normalTest(elecequip,method=c("jb")) 
+#Since p-value > 0.05, we fail to reject H0. Data is normally distributed.
+```
+
+Now let's look at the serial correlation in this time series. 
+
+```{r eda3}
+acf(elecequip)
+
+# COMPUTE LJUNG-BOX TEST FOR WHITE NOISE (NO AUTOCORRELATION)
+#H0: p(1) = p(2) = p(k) = 0
+#H1: p(k) is not equal to 0
+
+Box.test(elecequip,lag=12,type='Ljung') 
+
+#Since p value < 0.05, we reject H0. There is serial autocorrelation!
+```
+
+
+## Digression  
+
+What would have happened if the JB test shows the data is not normally distributed? What can we do?  
+
+* logarithmic transformation  
+* power transformation (squared, cubed, etc.)  
+* Box-Cox transformation https://otexts.com/fpp2/transformations.html  
+
+```{r boxcox}
+autoplot(AirPassengers)
+normalTest(AirPassengers,method=c("jb")) #reject H0. Not normal dist.
+
+BoxCox.lambda(AirPassengers)
+autoplot(BoxCox(AirPassengers, lambda="auto")) #automate
+normalTest(BoxCox(AirPassengers,lambda="auto"), method=c("jb")) #reject H0
+```
+
+How does this compare to taking the natural log?  
+
+```{r log}
+#?AirPassengers
+AirPassengers_log <- log(AirPassengers)
+normalTest(AirPassengers_log, method=c("jb")) #perhaps normal now?
+qqnorm(AirPassengers_log)
+qqline(AirPassengers_log, col = 2)
+```
+
+Can you identify the components of this time series?  
+
+Trend: Pattern exists when there is a long-term increase or decrease in the data.
+
+Cyclical: Pattern exists when data exhibit rises and falls that are *not of fixed period* (duration usually of at least 2 years).
+
+Seasonal: Pattern exists when a series is influenced by seasonal factors (e.g., the quarter of the year, the month, or day of the week).
+
+# Smoothing
+
+## Approach 1: Moving Average (MA)
+
+```{r cma}
+ma(elecequip, order=12) 
+
+autoplot(elecequip, series="Data") +
+  autolayer(ma(elecequip, 12), series="12-MA") +
+  xlab("Year") + ylab("New orders index") +
+  ggtitle("Electrical equipment manufacturing (Euro area)") +
+  scale_colour_manual(values=c("Data"="grey","12-MA"="red"),
+                      breaks=c("Data","12-MA"))
+```
+
+What difference(s) do you see with this smoothing method?
+
+```{r ma}
+ma(elecequip, 12, centre = FALSE)
+
+autoplot(elecequip, series="Data") +
+  autolayer(ma(elecequip, 12, centre=FALSE), series="12-MA") +
+  xlab("Year") + ylab("New orders index") +
+  ggtitle("Electrical equipment manufacturing (Euro area)") +
+  scale_colour_manual(values=c("Data"="grey","12-MA"="red"),
+                      breaks=c("Data","12-MA"))
+```
+
+## Quick Exercise
+Change the MA to 3, 6, 9, and 24 periods. What differences do you see?
+
+
+## Time series decomposition
+
+  *  Additive model  appropriate if  magnitude of  seasonal fluctuations does not vary with level.
+  *  If seasonal are proportional to level of series, then multiplicative model appropriate.
+  *  Multiplicative decomposition more prevalent with economic series
+  *  Logs turn multiplicative relationship into an additive relationship:
+
+Are seasonal fluctuations a constant value or proportionally different?  
+Additive: e.g. Manufacturing order index is always 110 in March.
+Multiplicative: e.g. Manufacturing is 10% higher (or lower) in March.  
+
+Let's look at some plots.
+
+```{r seasonality}
+ggsubseriesplot(elecequip)
+acf(elecequip)
+```
+
+#Multiplicative Decomposition
+
+```{r}
+elecequip %>% decompose(type="multiplicative") %>%
+  autoplot() + xlab("Year") +
+  ggtitle("Classical multiplicative decomposition
+    of electrical equipment index")
+```
+
+How does the Multiplicative Decomposition Model do in "smoothing" the time series? Do you see any problem in the remainder component? Is it moving with any other component?
+
+What's wrong with classical decomposition?  
+
+1. No estimates for the first few and last few observations in time series. This is due to the MA technique being used to do the decomposition.  
+2. Trend-cycle component is overreactive (rises and falls too rapidly).  
+3. Seasonal components repeat year to year.  
+4. Cannot deal with "shocks".  
+
+## X11 & SEATS Decomposition  
+
+```{r x11}
+library(seasonal)
+fit.x11 <- seas(elecequip, x11="")
+autoplot(fit.x11) +  ggtitle("X11 decomposition of electrical equipment index")
+```
+
+Advantages:  
+
+  *  Relatively robust to outliers
+  *  Completely automated choices for trend and seasonal changes
+  *  Very widely tested on economic data over a long period of time.
+
+Disadvantages:  
+
+  *  No prediction/confidence intervals
+  *  Ad hoc method with no underlying model
+  *  Only developed for quarterly and monthly data
+
+
+```{r seats}
+library(seasonal)
+fit.seats <- seas(elecequip)
+autoplot(fit.seats) +
+  ggtitle("SEATS decomposition of electrical equipment index")
+```
+
+### SEATS (SEASONAL EXTRACTION IN ARIMA Time Series)
+
+```{r seats-seasadj}
+autoplot(elecequip, series="Data") +
+  autolayer(trendcycle(fit.seats), series="Trend") +
+  autolayer(seasadj(fit.seats), series="Seasonally Adjusted") +
+  xlab("Year") + ylab("New orders index") +
+  ggtitle("Electrical equipment manufacturing (Euro area)") +
+  scale_colour_manual(values=c("gray","blue","red"),
+                     breaks=c("Data","Seasonally Adjusted","Trend"))
+```
+
+
+```{r elecequip-seats}
+ggsubseriesplot(seasonal(fit.seats)) + ylab("Seasonal")
+```
+
+Advantages: 
+  * Model-based
+  * Smooth trend estimate
+  * Allows estimates at end points
+  * Allows changing seasonality
+  * Developed for economic data
+
+Disadvantage:  
+  *  Only developed for quarterly and monthly data
+
+
+## STL decomposition
+
+  *  STL: "Seasonal and Trend decomposition using Loess"
+  *  Very versatile and robust.
+  *  STL will handle any type of seasonality.
+  *  Seasonal component allowed to change over time, and rate of change controlled by user.
+  *  Smoothness of trend-cycle also controlled by user.
+  *  Robust to outliers
+  *  Not trading day or calendar adjustments.
+  *  Only additive.
+  *  Take logs to get multiplicative decomposition.
+  *  Use Box-Cox transformations to get other decompositions.
+
+## STL decomposition (SEASONAL AND TREND DECOMPOSITION USING LOESS)  
+
+```{r stlagain}
+#?stl 
+#look at the help file first
+#`t.window` controls wiggliness of trend component. Default is defined in help file.
+#`s.window` controls variation on seasonal component. periodic means to use the default period (month in this case) to calculate the seasonal components
+fit <- stl(elecequip, s.window="periodic", robust=TRUE)
+autoplot(fit) +
+  ggtitle("STL decomposition of electrical equipment index")
+```
+
+Try out different s and t window values to see the different. Be sure to look at the ACF plot to see if you can identify the number of lags to use for the windows.
+
+```{r stlagain2}
+fit <- stl(elecequip, s.window="periodic", t.window=NULL, robust=TRUE)
+autoplot(fit) +
+  ggtitle("STL decomposition of electrical equipment index")
+```
+
+Or we can try to "automate" the process:  
+ 
+```{r mstl}
+elecequip %>% mstl() %>% autoplot()
+```
+
+For more information, see link: https://www.scb.se/contentassets/ca21efb41fee47d293bbee5bf7be7fb3/stl-a-seasonal-trend-decomposition-procedure-based-on-loess.pdf
+
+
+
+## Forecasting and decomposition
+
+  *  Forecast seasonal component by repeating the last year
+  *  Forecast seasonally adjusted data using non-seasonal time series method.
+  *  Combine forecasts of seasonal component with forecasts of seasonally adjusted data to get forecasts of original data.
+  *  Sometimes a decomposition is useful just for understanding the data before building a separate forecasting model.
+
+## Electrical equipment
+
+
+```{r elecequip4, echo=TRUE}
+fit <- stl(elecequip, t.window=13, s.window="periodic")
+```
+
+We use the naive method to forecast the seasonally adjusted component (Trend, Cyclical, and Random) and seasonality component. The two components are added together to create a "reseasonalized" forecast.
+
+```{r seasadjfit}
+autoplot(elecequip, series="Data") +
+  autolayer(seasadj(fit), series="Seasonally Adjusted") +
+  xlab("Year") + ylab("New orders index") +
+  ggtitle("Electrical equipment manufacturing (Euro area)") +
+  scale_colour_manual(values=c("gray","blue"),
+                     breaks=c("Data","Seasonally Adjusted"))
+```
+
+Now let's bring everything together to get forecasts
+
+```{r elecequip5}
+fit %>% forecast(method='naive', h=36) %>%
+  autoplot() + ylab("New orders index") + xlab("Year")
+
+summary(fit %>% forecast(method='naive'))
+```
+
+
+## Decomposition and prediction intervals
+
+  *  It is common to take the prediction intervals from the seasonally adjusted forecasts and modify them with the seasonal component.
+  *  This ignores the uncertainty in the seasonal component estimate.
+  *  It also ignores the uncertainty in the future seasonal pattern.
