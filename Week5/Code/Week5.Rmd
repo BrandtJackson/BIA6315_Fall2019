@@ -1,0 +1,278 @@
+---
+title: 'Week 5: ARIMA (Part 1)'
+author: "Xuan Pham"
+date: "9/17/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+You will need these packages: fpp2, urca, forecast, and stats
+
+# Refresher: Transformation 
+
+We have talked about the **i.i.d** assumption:  
+*observations are independent of each other  
+*observations are drawn from the same (identical) probability distribution  
+
+
+If this assumption is met, we can calculate the joint probability of all the observations as follows: P(time series) = P(X1) * P(X2) * P(X3)...  
+In machine learning parlance, the i.i.d assumption allows us to focus on modeling the relationships among variables (columns) and not have to worry about the relationships among the observations (rows). 
+
+The **i.i.d** assumption is questionable for time series data. We cannot guarantee that each observation is arising from the same processes. It's possible that we are seeing many "mini" processes occurring over some length of time. We called this problem "autocorrelation." Hence, we need to figure out ways to remove autocorrelation.   
+
+We have also looked at time series exploratory data analysis (EDA) where we focused on the four moments of a distribution: 
+1. Mean  
+2. Variance  
+3. Skewness  
+4. Kurtosis  
+
+We also know that a normal distribution has these characteristics:  
+
+1. Mean is stable throughout the series.  
+2. Variance is stable throghout the series (variance = sigma^square).  
+3. Skewness does not exist. The distribution should be symmetric.  
+4. Kurtosis is 3, meaning the distribution is not flatter or peakier than a normal distribution. 
+
+We have already discussed ways to stabilize the variance of a time series via transformations. We discussed logarithmic, power, and Box-Cox transformations.  Here is an example: 
+
+```{r}
+library(fpp2)
+autoplot(AirPassengers)
+AP.log <- log(AirPassengers)
+autoplot(AP.log)
+
+AP.BC <- BoxCox(AirPassengers, lambda="auto")
+autoplot(AP.BC)
+```
+
+# Stationarity  
+
+We are going to tackle the issue of stabilizing the mean in this module. If a time series has trend and/or seasonality, the mean is not constant/stable. If we can remove the trend and seasonality, we are left with a series that has no predictable patterns. A time series with no discernable, predictable patterns is called a stationary series. 
+
+Let's look at a new time series. The series has a trend.  
+
+To stabilize the mean (and remove the trend), we are going to take the difference between consecutive observations.  
+
+Y_t = Y_t - Y_(t-1)  
+
+This is called taking the "first difference" or "first order difference."  
+
+```{r}
+autoplot(goog)
+goog.firstdiff <- diff(goog)
+autoplot(goog.firstdiff)
+```
+
+Notice the trend is gone. Let's do some further digging.  
+
+```{r}
+acf(goog.firstdiff)
+
+# COMPUTE LJUNG-BOX TEST FOR WHITE NOISE (NO AUTOCORRELATION)
+#H0: p(1) = p(2) = p(k) = 0
+#H1: p(k) is not equal to 0
+
+Box.test(goog.firstdiff,lag=10,type='Ljung')
+                    
+```
+
+We are left with a series without discernable pattern. This is a stationary time series.  
+
+It is also possible to take a second-order difference if we do not achieve stationarity with the first-order difference. Typically, we do not go beyond second-order difference.  
+
+Sometimes, it is necessary to take the seasonal difference to achieve stationarity. Seasonal difference is the change between one year to the next. Remember that seasonal difference is NOT ordinary difference (i.e. first-order, second-order)  
+
+```{r}
+diabetic.drug <- a10
+autoplot(diabetic.drug)
+diabetic.drug.log <- log(diabetic.drug)
+autoplot(diabetic.drug.log)
+diabetic.drug.log.seas.diff <- diff(diabetic.drug.log, 12)
+autoplot(diabetic.drug.log.seas.diff)
+acf(diabetic.drug.log.seas.diff)
+Box.test(diabetic.drug.log.seas.diff,lag=12,type='Ljung')
+```
+Still not quite stationary yet. Perhaps we need to take the first difference to remove the trend?  
+
+```{r}
+diabetic.drug.log.seas.diff.first.order <- diff(diabetic.drug.log.seas.diff)
+autoplot(diabetic.drug.log.seas.diff.first.order)
+acf(diabetic.drug.log.seas.diff.first.order)
+Box.test(diabetic.drug.log.seas.diff.first.order,lag=12,type='Ljung')
+```
+What do you think about the different information in the ACF plot and the JB test?  
+
+## Unit Root Test  
+
+The unit root test allows us to determine whether a series is stationary or not.  The textbook used the KPSS test. We will follow the same fashion.  
+
+```{r}
+#H0: Data is stationary.  
+#H1: Data is not stationary. 
+library (urca) #KPSS test is in the urca package  
+summary(ur.kpss(diabetic.drug))
+```
+Since the test statistic is greater than all the critical values, we reject H0. The diabetic drug time series is not stationary. But what about after we have done the seasonal difference and then the first order difference? Is it stationary now?  
+
+```{r}
+#H0: Data is stationary.  
+#H1: Data is not stationary. 
+library (urca) #KPSS test is in the urca package  
+summary(ur.kpss(diabetic.drug.log.seas.diff.first.order))
+```
+The test statistic is smaller than all the critical values. We cannot reject H0. We do have a stationary series now.  
+
+There is a nifty function that used the KPSS test to determine the number of ordinary difference(s) to do to make a series stationary. There's also a similar function for seasonal difference.
+
+```{r}
+library(forecast)
+ndiffs(goog, alpha = 0.05)
+nsdiffs(diabetic.drug, alpha = 0.05)
+ndiffs(diabetic.drug.log.seas.diff, alpha=0.05) #notice the test gives a different answer than what we did above.
+```
+
+
+So what do we do once we have a stationary time series? How do we model the underlying processes in a stationary time series?  
+
+# Autoregressive Models  
+
+Since observations in a time series are correlated, can we use autocorrelation to our advantage? Can we use past observations to forecast future observations? In an autoregressive model, we use a multiple linear regression model where the lagged values of Y(t) are the predictors.  
+
+```{r}
+library(stats)
+
+diabetic.lag1 <- lag(diabetic.drug.log.seas.diff.first.order, k=1)
+head(diabetic.drug, 12)
+head(diabetic.lag1,12)
+
+AR.Model.1 <- lm(diabetic.drug.log.seas.diff.first.order~diabetic.lag1)
+summary(AR.Model.1)
+
+plot(AR.Model.1$fitted.values, type="l")
+```
+
+
+We can make the AR model above to have two lagged Y(t) as predictors too. This can continue to include as many lagged predictors as we have. Hence, autoregressive models are denoted as **AR(p)** to show the number of lagged periods used as predictors.  
+
+# Moving Average Models  
+
+Instead of using lagged values as predictors, we can also use the past (lagged) forecast errors as predictors too.  
+
+```{r}
+forecast.errors <- AR.Model.1$residuals
+
+MA.Model.1 <- lm(diabetic.drug.log.seas.diff.first.order~forecast.errors)
+summary(MA.Model.1)
+
+```
+
+We can also include more than one lagged forecast error. Moving Average models are denoted as **MA(q)**. 
+
+# ARIMA (AutoRegressive Integrated Moving Average) Models 
+
+ARIMA is the combination of AR, reverse of Differencing (Integrated), and MA models. An ARIMA model is denoted as **ARIMA(p,d,q)**.  
+p = number of lagged observations used in the autoregressive model    
+d = number of differences performed to make a time series stationary  
+q = number of lagged forecast errors used in a moving average model  
+
+ARIMA is considered a black-box model because it is not always easy to tell what p, d, and q values to use.  
+
+Let's start with d. We know that we can use the tools above to find the d value.  
+
+## ARIMA(p,d,0)
+
+If we have a time series that is ARIMA(p,d,0) then we can use the ACF plot and an associated plot called the PACF (partial autocorrelation function) to help us find the p value.  
+
+The PACF measures the relationship between Y(t) and Y(t-k) after removing the effects of all the previous lags. 
+
+IF the ACF is exponentially decreasing or sinusoidal (oscillating pattern)
+AND PACF shows a significant spike up to lag k but not after that  
+THEN use the number of lags in the PACF to determine the p value.   
+
+```{r}
+autoplot(uschange[,"Consumption"])
+cons <- uschange[,"Consumption"]
+acf(cons)
+pacf(cons)
+```
+
+Here's the ARIMA(3,0,0) model:  
+
+```{r}
+fit <- Arima(cons, order=c(3,0,0))
+fit
+```
+This model can be written as: 
+Cons(t) = 0.227Cons(t-1) + 0.160Cons(t-2) + 0.745Cons(t-3)  
+
+Now we check the residuals to make sure they are white noise. The residuals are indeed white noise!   
+
+```{r}
+checkresiduals(fit)
+```
+
+What if I were to pick ARIMA(2,0,0) or ARIMA(3,0,0)?  
+
+```{r}
+fit2 <- Arima(cons, order=c(2,0,0))
+fit2
+checkresiduals(fit2)
+
+fit3 <- Arima(cons, order=c(4,0,0))
+fit3
+checkresiduals(fit3)
+```
+
+We would use the AICc to select the best model among the three candidates. 
+ARIMA(2,0,0): 346.49
+ARIMA(3,0,0): 340.67
+ARIMA(4,0,0): 341.93  
+
+The ARIMA(3,0,0) model has the lowest AICc so it is the best fit.
+
+How about using the ARIMA(3,0,0) model to forecast?
+
+```{r}
+#run this to see the actual point & interval forecasts
+#forecast(fit,h=12)
+#or you can plot them
+autoplot(forecast(fit), h=12)
+```
+
+## ARIMA(0,d,q)
+
+If we have a time series that is ARIMA(0,d,q) then we can use the ACF plot and an associated plot called the PACF (partial autocorrelation function) to help us find the p value.  
+
+The PACF measures the relationship between Y(t) and Y(t-k) after removing the effects of all the previous lags. 
+
+IF the PACF is exponentially decreasing  or sinusoidal (periodic oscillation)
+AND the ACF shows a significant spike up to lag k but not after that  
+THEN use the number of lags in the ACF to help you determine the q value.  
+
+```{r}
+autoplot(austa)
+ndiffs(austa, alpha = 0.05)
+austa.diff <- diff(austa)
+autoplot(austa.diff)
+acf(austa.diff)
+pacf(austa.diff)
+```
+
+```{r}
+fit <- Arima(austa, order=c(1,1,0))
+fit
+checkresiduals(fit)
+
+autoplot(forecast(fit),h=2) #two year forecast
+```
+
+If you have both AR and MA processes in a time series, then the ACF and PACF will not be able to help you. You will need to right out a combination of both to get a model. More on this next week.  
+
+# Decision Tree for ARIMA Model Selection 
+From Hyndman's text in Section 8.7
+![](https://otexts.com/fpp2/arimaflowchart.png)
+
+
