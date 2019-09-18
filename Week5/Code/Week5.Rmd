@@ -13,17 +13,17 @@ You will need these packages: fpp2, urca, forecast, and stats
 
 # Refresher: Transformation 
 
-We have talked about the **i.i.d** assumption:  
-*observations are independent of each other  
-*observations are drawn from the same (identical) probability distribution  
+We have talked about the **i.i.d** assumption:    
+* observations are independent of each other    
+* observations are drawn from the same (identical) probability distribution  
 
 
 If this assumption is met, we can calculate the joint probability of all the observations as follows: P(time series) = P(X1) * P(X2) * P(X3)...  
 In machine learning parlance, the i.i.d assumption allows us to focus on modeling the relationships among variables (columns) and not have to worry about the relationships among the observations (rows). 
 
-The **i.i.d** assumption is questionable for time series data. We cannot guarantee that each observation is arising from the same processes. It's possible that we are seeing many "mini" processes occurring over some length of time. We called this problem "autocorrelation." Hence, we need to figure out ways to remove autocorrelation.   
+The **i.i.d** assumption is questionable for time series data. We cannot guarantee that each observation is arising from the same processes. It's possible that we are seeing many "mini" processes occurring over some length of time. We called this "autocorrelation." Hence, we need to figure out ways to remove autocorrelation.   
 
-We have also looked at time series exploratory data analysis (EDA) where we focused on the four moments of a distribution: 
+We have also looked at time series exploratory data analysis (EDA) where we focused on the four moments of a distribution:   
 1. Mean  
 2. Variance  
 3. Skewness  
@@ -34,7 +34,7 @@ We also know that a normal distribution has these characteristics:
 1. Mean is stable throughout the series.  
 2. Variance is stable throghout the series (variance = sigma^square).  
 3. Skewness does not exist. The distribution should be symmetric.  
-4. Kurtosis is 3, meaning the distribution is not flatter or peakier than a normal distribution. 
+4. Peakiness does not exist. 
 
 We have already discussed ways to stabilize the variance of a time series via transformations. We discussed logarithmic, power, and Box-Cox transformations.  Here is an example: 
 
@@ -62,6 +62,10 @@ This is called taking the "first difference" or "first order difference."
 
 ```{r}
 autoplot(goog)
+goog.lag <- lag(goog, k=1)
+
+head(goog)
+head(goog.lag)
 goog.firstdiff <- diff(goog)
 autoplot(goog.firstdiff)
 ```
@@ -135,6 +139,24 @@ ndiffs(diabetic.drug.log.seas.diff, alpha=0.05) #notice the test gives a differe
 ```
 
 
+```{r}
+autoplot(visitors)
+visitors.BC <- BoxCox(visitors, lambda="auto")
+autoplot(visitors.BC)
+
+nsdiffs(visitors.BC)
+
+visitors.BC.sea <- diff(visitors.BC, k=12)
+autoplot(visitors.BC.sea)
+
+ndiffs(visitors.BC.sea)
+acf(visitors.BC.sea)
+Box.test(visitors.BC.sea, type = "Ljung-Box")
+summary(ur.kpss(visitors.BC.sea))
+
+```
+
+
 So what do we do once we have a stationary time series? How do we model the underlying processes in a stationary time series?  
 
 # Autoregressive Models  
@@ -195,8 +217,8 @@ THEN use the number of lags in the PACF to determine the p value.
 ```{r}
 autoplot(uschange[,"Consumption"])
 cons <- uschange[,"Consumption"]
-acf(cons)
-pacf(cons)
+acf(cons) 
+pacf(cons) #3 significant lags
 ```
 
 Here's the ARIMA(3,0,0) model:  
@@ -257,19 +279,21 @@ autoplot(austa)
 ndiffs(austa, alpha = 0.05)
 austa.diff <- diff(austa)
 autoplot(austa.diff)
-acf(austa.diff)
-pacf(austa.diff)
+acf(austa.diff) #one significant lag
+pacf(austa.diff) #no significant lag
 ```
 
 ```{r}
-fit <- Arima(austa, order=c(1,1,0))
+fit <- Arima(austa, order=c(0,1,1))
 fit
 checkresiduals(fit)
+
+forecast(fit, h=2)
 
 autoplot(forecast(fit),h=2) #two year forecast
 ```
 
-If you have both AR and MA processes in a time series, then the ACF and PACF will not be able to help you. You will need to right out a combination of both to get a model. More on this next week.  
+If you have both AR and MA processes in a time series, then the ACF and PACF will not be able to help you. You will need to find right out a combination of both to get a model. More on this next week.  
 
 # Decision Tree for ARIMA Model Selection 
 From Hyndman's text in Section 8.7
