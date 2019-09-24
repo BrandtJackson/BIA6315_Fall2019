@@ -1,0 +1,291 @@
+---
+title: 'Week 6: ARIMA (Part 2)'
+author: "Xuan Pham"
+date: "9/24/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+Last week, we learned:  
+
+* ARIMA(p,d,0) is appropriate if: 1) ACF plot is exponentially decaying or sinusoidal and 2) PACF plot shows a significant spike at lag p but nothing else after.  
+
+* ARIMA(0,d,q) is appropriate if: 1) ACF plot shows a significant spike at lag q but nothing else after and 2) PACF plot is exponentially decaying or sinusoidal  
+
+# A New Case
+
+What patterns do you see in the Quarterly Percentage Change in US Consumption Expenditure time series? 
+```{r}
+library(fpp2)
+library(forecast)
+library(tidyverse)
+library(ggplot2)
+library(urca)
+autoplot(uschange[,"Consumption"]) +
+  xlab("Year") + ylab("Quarterly percentage change")
+
+plot(stl(uschange[,"Consumption"], s.window=4))
+```
+
+Let's look at the serial correlation.
+
+```{r}
+ggAcf(uschange[,"Consumption"])
+ggPacf(uschange[,"Consumption"])
+```
+
+ACF plot shows 3 significant lags and perhaps even 4?    
+PACF plot also shows 3 significant lags.  
+
+Now that we have positive p and q lags, what do we do?  
+
+We can account for the 3 lags in the ACF and have something like this: ARIMA(3,0,0). If we want to account for the 4th lag, we can do ARIMA(4,0,0).  
+We can also account for the 3 lags in the PACF and have something like this: ARIMA(0,0,3).  
+We can even have this: ARIMA(3,0,3). Or ARIMA(4,0,3). 
+
+```{r}
+fit1 <- Arima(uschange[,"Consumption"], order=c(3,0,0))
+fit2 <- Arima(uschange[,"Consumption"], order=c(0,0,3))
+fit3 <- Arima(uschange[,"Consumption"], order=c(4,0,0))
+fit4 <- Arima(uschange[,"Consumption"], order=c(3,0,3))
+fit5 <- Arima(uschange[,"Consumption"], order=c(4,0,3))
+
+fit1
+fit2
+fit3
+fit4
+fit5
+```
+
+AICc of the ARIMA models:  
+ARIMA(3,0,0) = 340.67  
+ARIMA(0,0,3) = 343.09  
+ARIMA(3,0,3) = 345.21  
+ARIMA(4,0,0) = 341.93  
+ARIMA(4,0,3) = 342.59  
+
+So out of the five models, the best fit is ARIMA(3,0,0). But what about the residuals?  
+
+```{r}
+checkresiduals(fit1)
+```
+
+We can include a constant term that acts as a polynomial trend of order d in the forecast function.  
+
+Two options to do so in Arima():  
+
+1. *include.mean=TRUE* is the default setting. This option adds a constant term to the ARIMA model and is only valid for d = 0. Setting include.mean=FALSE allows R to set the constant term = 0.    
+2. *include.drift=FALSE* is the default setting. This option allows the constant term to be estimated when d=1. This option is not valid for d>1.  
+
+# Hyndman-Khandakar Algorithm for Automating ARIMA Model Selection  
+
+Step 1: Determine d by doing repeated unit root tests (KPSS).  
+Step 2: Use a stepwise approach to find d and q values. Fit these initial models: 
+* ARIMA(0,d,0) + constant unless d = 2   
+* ARIMA(1,d,0) + constant unless d = 2  
+* ARIMA(0,d,1) + constant unless d = 2
+* ARIMA(2,d,2) + constant unless d = 2 
+If d <= 1, then also fit ARIMA(0,d,0) without a constant.  
+
+Step 3: Best model from above initial list becomes "current model" using AICc as performance measure.  
+
+Step 4: Vary p and q by +/-1 and including/excluding the constant for the "current model" in Step 3. Model with best AICc becomes the next "current model."  
+
+Step 5: Repeat Step 4 until AICc cannot be minimized any further.  
+
+```{r}
+fit.auto <- auto.arima(uschange[,"Consumption"], seasonal=FALSE)
+
+fit.auto
+```
+AICc = 342.08. ARIMA(1,0,3) does not perform as well as our ARIMA(3,0,0) model. This is because it did not account for all the possible ARIMA models. It uses a stepwise search algorithm. What if we ask auto.arima() to work harder?  
+
+```{r}
+fit.exhaust <- auto.arima(uschange[,"Consumption"], seasonal=FALSE,
+  stepwise=FALSE, approximation=FALSE)
+
+fit.exhaust
+```
+Now we are in agreement with auto.arima().  
+
+```{r}
+fit.exhaust %>% forecast(h=10) %>% autoplot(include=80)
+
+forecasts <- forecast(fit.exhaust, h=10)
+forecasts
+```
+
+# Seasonal ARIMA Models 
+
+A Seasonal ARIMA model includes additional seasonal terms in the ARIMA model.  
+ARIMA(p,d,q)(P,D,Q)m where the (P,D,Q)m are the seasonal components. The same autoregressive, differencing, and moving average models apply except we are now backshifting into the same seasonal period from the previous year.  
+
+Here is a time series plot showing the quarterly retail trade index in the Euro Area (17 countries) between 1996 and 2011.  
+
+```{r}
+autoplot(euretail) + ylab("Retail index") + xlab("Year") 
+
+plot(stl(euretail, s.window=4))
+```
+It looks like the series has both trend/cycle and seasonality.  
+
+Let's check to see if we need to seasonally difference the series.  
+```{r}
+euretail %>% ur.kpss() %>% summary()
+nsdiffs(euretail)
+```
+```{r}
+euretail %>% diff(lag=4) %>% ggtsdisplay()
+
+euretail.sd <- euretail %>% diff(lag=4) #save the seasonally differenced series
+
+ndiffs(euretail.sd) #check to see whether we should still difference the seasonally differenced series. 
+```
+```{r}
+euretail %>% diff(lag=4) %>% diff() %>% ggtsdisplay()
+
+euretail.sd.fd <- euretail %>% diff(lag=4) %>% diff() 
+
+ndiffs(euretail.sd.fd) #no further differencing
+```
+
+The ACF plot shows 1st and 4th lag as significant. It is also sinuisoidal (repeating oscillatng pattern).  
+The PACF plot looks the same.  
+
+Let's tackle the ACF plot first. It looks like the first lag is the non-seasonal component and the 4th lag is the seasonal component. So our ARIMA model can be: ARIMA(0,1,1)(0,1,1)4.   
+
+Likewise, if we were to start with the PACF plot, we can say the model is: ARIMA(1,1,0)(1,1,0)4.  
+
+We can also combine AR and MA to come up with: ARIMA(1,1,1)(1,1,1)4. 
+
+Now let's test them out.  
+
+```{r}
+fit1 <- Arima(euretail, order=c(0,1,1), seasonal=c(0,1,1))
+fit2 <- Arima(euretail, order=c(1,1,0), seasonal=c(1,1,0))
+fit3 <- Arima(euretail, order=c(1,1,1), seasonal=c(1,1,1))
+
+fit1
+fit2
+fit3
+```
+Here are the AICc:  
+ARIMA(0,1,1)(0,1,1)4 = 75.72  
+ARIMA(1,1,0)(1,1,0)4 = 77.01  
+ARIMA(1,1,1)(1,1,1)4 = 71.33  
+
+It looks like the last model has the best performance. Now let's check on the residuals.  
+
+```{r}
+checkresiduals(fit3)
+```
+What about auto.arima()?  
+
+```{r}
+fit.auto <- auto.arima(euretail, seasonal=TRUE)
+fit.auto
+```
+
+```{r}
+fit.exhaust <- auto.arima(euretail, seasonal=TRUE,
+  stepwise=FALSE, approximation=FALSE)
+fit.exhaust
+```
+auto.arima() did even better than we did!  
+
+```{r}
+checkresiduals(fit.exhaust)
+```
+
+# Another Seasonal Time Series 
+
+Let's switch gears and look at another time series. This series contains the millions of monthly scripts for corticosteroid drugs in Australia from July 1991 to June 2008.  
+
+```{r}
+autoplot(h02)
+plot(stl(h02, s.window=12))
+```
+
+We have both trend/cycle and seasonality. The seasonal cycles do not look stable.  
+
+Let's do a log transformation to stabilize the variance.  
+```{r}
+lh02 <- log(h02)
+cbind("H02 sales (million scripts)" = h02,
+      "Log H02 sales"=lh02) %>%
+  autoplot(facets=TRUE) + xlab("Year") + ylab("")
+```
+
+
+
+Let's take the seasonal difference to see if it makes the mean more stable (i.e. stationary)
+
+```{r}
+lh02 %>% diff(lag=12) %>%
+  ggtsdisplay(xlab="Year",
+    main="Seasonally differenced H02 scripts")
+```
+
+Because the ACF plot shows an exponential decay pattern and the PACF plot does not, it is likely the case that we have an autoregressive model (AR). So let's turn our attention to the PACF plot.  
+
+This plot shows significant lags at 12 and 24, indicating there is a seasonal AR component. We may want to try AR(2) for the seasonal part.  As for the non-seasonal component, we have 3 significant lags. We may want to try AR(3) for the non-seasonal component. So here is a possible ARIMA model: ARIMA(3,0,0)(2,1,0)12.  
+
+```{r}
+fit.manual <- Arima(h02, order=c(3,0,0), seasonal=c(2,1,0),
+  lambda=0) #lambda=0 is the log transformation in Box-Cox
+fit.manual
+checkresiduals(fit.manual, lag=24)
+checkresiduals(fit.manual, lag=36)
+```
+
+Now let's try auto.arima()
+
+```{r}
+fit.exhaust <- auto.arima(h02, seasonal=TRUE,
+  stepwise=FALSE, approximation=FALSE, lambda="auto")
+
+fit.exhaust
+```
+
+# ARIMA vs. ETS()
+
+```{r}
+train <- window(h02,end=c(2006,12))
+```
+
+```{r}
+fit.arima <- auto.arima(train, seasonal=TRUE,
+  stepwise=FALSE, approximation=FALSE, lambda="auto")
+fit.arima
+checkresiduals(fit.arima, lag=24)
+checkresiduals(fit.arima, lag=36)
+```
+
+```{r}
+fit.ets <- ets(train)
+fit.ets
+
+checkresiduals(fit.ets)
+```
+
+```{r}
+a1 <- fit.arima %>% forecast(h = 12*(2008-2007)+1) %>%
+  accuracy(h02)
+a1[,c("RMSE","MAE","MAPE","MASE")]
+
+a2 <- fit.ets %>% forecast(h = 12*(2008-2007)+1) %>%
+  accuracy(h02)
+a2[,c("RMSE","MAE","MAPE","MASE")]
+```
+
+ARIMA model does a better job at both fitting the train set and predicting the test set. 
+
+Now let's use the ARIMA model to forecast the next two years.
+
+```{r}
+h02 %>% auto.arima(stepwise = FALSE, approximation = FALSE, lambda="auto") %>% forecast(h=24) %>% autoplot()
+```
+

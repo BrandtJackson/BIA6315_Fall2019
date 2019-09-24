@@ -1,0 +1,68 @@
+---
+title: 'Week 6: Bilateral Trade'
+author: "Xuan Pham"
+date: "9/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First, let's pull the export and import trade values between US and China from 1980 to 2018.  
+```{r}
+library(tradestatistics)
+library(tidyverse)
+library(xts)
+
+options(scipen=999)
+bilateral <- ots_create_tidy_data(year = c(1990:2018), reporters="us", partners="chn", table = "yrp")
+```
+
+We need to adjust the reported values for inflation. The latest inflation adjustment published by the World Bank is 2017. We have to convert all reported values to 2017 dollar amount.  
+
+```{r}
+bilateral.adj <- ots_inflation_adjustment(trade_data = bilateral,
+reference_year=2017)
+```
+
+Using brute force to fill in the value for 2017.  
+
+```{r}
+year_2017 <- bilateral[28,"export_value_usd"]-bilateral[28,"import_value_usd"]
+```
+
+Now we can calculate the trade balance (Export - Import).  
+
+```{r}
+bilateral.df <- bilateral.adj %>% dplyr::mutate(balance = export_value_usd - import_value_usd) %>% select(year, balance)
+
+bilateral.df[28,"balance"] <- year_2017
+```
+
+Transforming balance by dividing $1M. Balance is now reported in millions of dollars.  
+
+```{r}
+bilateral.df$balance <- bilateral.df$balance/1000000
+```
+
+Creating an xts object.  
+
+```{r}
+bilateral.df$mdy <- paste0('12-','31-',bilateral.df$year)
+bilateral.df$mdy <- as.Date(bilateral.df$mdy,
+                                  "%m-%d-%Y")
+bilateral.xts <- xts(x=bilateral.df$balance,
+                     order.by = bilateral.df$mdy)
+plot(bilateral.xts)
+```
+
+Creating a ts object.  
+
+```{r}
+bilateral.ts <- ts(bilateral.df$balance, start=1990, end=2018, frequency=1)
+
+autoplot(bilateral.ts)
+```
+
+Can you compare ARIMA and ETS models using cross validation?  
