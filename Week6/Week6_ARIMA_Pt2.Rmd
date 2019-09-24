@@ -2,11 +2,13 @@
 title: 'Week 6: ARIMA (Part 2)'
 author: "Xuan Pham"
 date: "9/24/2019"
-output: html_document
+output:
+  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
 Last week, we learned:  
@@ -84,10 +86,10 @@ Two options to do so in Arima():
 
 Step 1: Determine d by doing repeated unit root tests (KPSS).  
 Step 2: Use a stepwise approach to find d and q values. Fit these initial models: 
-* ARIMA(0,d,0) + constant unless d = 2   
-* ARIMA(1,d,0) + constant unless d = 2  
-* ARIMA(0,d,1) + constant unless d = 2
-* ARIMA(2,d,2) + constant unless d = 2 
+* ARIMA(0,d,0) + constant unless d = 2     
+* ARIMA(1,d,0) + constant unless d = 2    
+* ARIMA(0,d,1) + constant unless d = 2  
+* ARIMA(2,d,2) + constant unless d = 2   
 If d <= 1, then also fit ARIMA(0,d,0) without a constant.  
 
 Step 3: Best model from above initial list becomes "current model" using AICc as performance measure.  
@@ -130,6 +132,7 @@ autoplot(euretail) + ylab("Retail index") + xlab("Year")
 
 plot(stl(euretail, s.window=4))
 ```
+  
 It looks like the series has both trend/cycle and seasonality.  
 
 Let's check to see if we need to seasonally difference the series.  
