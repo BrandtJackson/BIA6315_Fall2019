@@ -73,7 +73,13 @@ So out of the five models, the best fit is ARIMA(3,0,0). But what about the resi
 
 ```{r}
 checkresiduals(fit1)
+checkresiduals(fit1, lag=12)
+checkresiduals(fit1, lag=24)
 ```
+
+Ljung-Box test  
+H0: p(0) = p(1) = ... = p(k) = 0 [No autocorrelation]  
+H1: p(k) IS NOT EQUAL to 0. [Autocorrelation exist]  
 
 We can include a constant term that acts as a polynomial trend of order d in the forecast function.  
 
@@ -275,11 +281,11 @@ checkresiduals(fit.ets)
 ```
 
 ```{r}
-a1 <- fit.arima %>% forecast(h = 12*(2008-2007)+1) %>%
+a1 <- fit.arima %>% forecast(h = 18) %>%
   accuracy(h02)
 a1[,c("RMSE","MAE","MAPE","MASE")]
 
-a2 <- fit.ets %>% forecast(h = 12*(2008-2007)+1) %>%
+a2 <- fit.ets %>% forecast(h = 18) %>%
   accuracy(h02)
 a2[,c("RMSE","MAE","MAPE","MASE")]
 ```
