@@ -1,0 +1,392 @@
+---
+title: 'Module 7: Time Series Regression, Pt 1'
+author: "Xuan Pham"
+date: "10/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(fpp2)
+autoplot(uschange[,c("Consumption","Income")]) +
+  ylab("% change") + xlab("Year")
+```
+
+ConsumptionChange = f(IncomeChange)
+
+```{r}
+uschange %>%
+  as.data.frame() %>%
+  ggplot(aes(x=Income, y=Consumption)) +
+    ylab("Consumption (quarterly % change)") +
+    xlab("Income (quarterly % change)") +
+    geom_point() +
+    geom_smooth(method="lm", se=FALSE)
+```
+
+We can fit the linear regression model using tslm() function.
+
+```{r}
+fit1 <- tslm(Consumption ~ Income, data=uschange)
+summary(fit1)
+```
+
+Can you interpret the y-intercept and fitted regression coefficient? 
+
+Let's do a multiple linear regression example.  
+
+```{r}
+library(GGally)
+uschange %>%
+  as.data.frame() %>%
+  GGally::ggpairs()
+```
+
+```{r}
+fit.consMR <- tslm(
+  Consumption ~ Income + Production + Unemployment + Savings,
+  data=uschange)
+summary(fit.consMR)
+```
+```{r}
+autoplot(uschange[,'Consumption'], series="Data") +
+  autolayer(fitted(fit.consMR), series="Fitted") +
+  xlab("Year") + ylab("") +
+  ggtitle("Percent change in US consumption expenditure") +
+  guides(colour=guide_legend(title=" "))
+```
+
+```{r}
+cbind(Data = uschange[,"Consumption"],
+      Fitted = fitted(fit.consMR)) %>%
+  as.data.frame() %>%
+  ggplot(aes(x=Data, y=Fitted)) +
+    geom_point() +
+    ylab("Fitted (predicted values)") +
+    xlab("Data (actual values)") +
+    ggtitle("Percent change in US consumption expenditure") +
+    geom_abline(intercept=0, slope=1)
+```
+
+# Some Reminders  
+
+Things to always keep in mind when working with linear regression time series models.  
+* Errors (e_t) have mean zero or else the forecast is systematically biased.  
+* Errors are not autocorrelated or else forecast is systematically inefficient. 
+* Errors are uncorrelated with the predictor variables or else we are leaving out important patterns from our model.  
+* The regression model is estimated using Ordinary Least Squares (OLS), which is minimizing the sum of squared errors.  
+
+# Model Evaluation  
+
+## Always check the residuals  
+
+```{r}
+checkresiduals(fit.consMR)
+```
+
+Instead of the Ljung-Box test for serial correlation, we use the Breusch-Godfrey test. This test is used to examine serial correlation (autocorrelation) of residuals from regression models. 
+
+H0: p(0) = p(1)=...=p(k) = 0. There is no significant autocorrelation function (ACF) lag. There is no autocorrelation.  
+H1: At least one p(k) IS NOT EQUAL to 0. At least one autocorrelation function (ACF) lag is different from 0. There is autocorrelation.  
+
+The goal is not to reject the null hypothesis. In this case, what does the Breusch-Godfrey test tell us about autocorrelation in the residuals?  
+
+## Residual plots  
+
+### Against predictors  
+
+These plots should look random. If the plot(s) show patterns, then the relationship in the underlying time series may not be linear. The fitted model needs to be adjusted/revised.  
+
+```{r}
+df <- as.data.frame(uschange)
+df[,"Residuals"]  <- as.numeric(residuals(fit.consMR))
+p1 <- ggplot(df, aes(x=Income, y=Residuals)) +
+  geom_point()
+p2 <- ggplot(df, aes(x=Production, y=Residuals)) +
+  geom_point()
+p3 <- ggplot(df, aes(x=Savings, y=Residuals)) +
+  geom_point()
+p4 <- ggplot(df, aes(x=Unemployment, y=Residuals)) +
+  geom_point()
+gridExtra::grid.arrange(p1, p2, p3, p4, nrow=2)
+
+```
+
+
+### Against fitted values  
+
+A plot of the residuals against the fitted values should also show no pattern. If a pattern is observed, there may be “heteroscedasticity” in the errors which means that the variance of the residuals may not be constant. If this problem occurs, a transformation of the forecast variable such as a logarithm or square root may be required.  
+
+```{r}
+cbind(Fitted = fitted(fit.consMR),
+      Residuals=residuals(fit.consMR)) %>%
+  as.data.frame() %>%
+  ggplot(aes(x=Fitted, y=Residuals)) + geom_point()
+```
+
+# Useful Predictors for Time Series Regression Models  
+
+```{r}
+beer2 <- window(ausbeer, start=1992)
+autoplot(beer2) + xlab("Year") + ylab("Megalitres")
+```
+
+## Trend  
+
+A linear trend can be included as a predictor.  
+
+## Dummy Variables  
+We can include dummy variables to account for:  
+* holidays 
+* outliers (a one time event)  
+* intervention/shock (one time event or lasting effect)  
+* seasonality  
+
+A note about creating seasonality dummy variables. You should always do this calculation:  
+
+Number of required dummy variables = number of seasons - 1 
+
+The effects of the omitted season are included in the y-intercept.  
+
+The interpretation of each of the coefficients associated with the dummy variables is that it is a measure of the effect of that category relative to the omitted category. 
+
+```{r}
+fit.beer <- tslm(beer2 ~ trend + season)
+summary(fit.beer)
+```
+
+Can you interpret the y-intercept and estimated regression coefficients?  
+
+```{r}
+autoplot(beer2, series="Data") +
+  autolayer(fitted(fit.beer), series="Fitted") +
+  xlab("Year") + ylab("Megalitres") +
+  ggtitle("Quarterly Beer Production")
+
+cbind(Data=beer2, Fitted=fitted(fit.beer)) %>%
+  as.data.frame() %>%
+  ggplot(aes(x = Data, y = Fitted,
+             colour = as.factor(cycle(beer2)))) +
+    geom_point() +
+    ylab("Fitted") + xlab("Actual values") +
+    ggtitle("Quarterly beer production") +
+    scale_colour_brewer(palette="Dark2", name="Quarter") +
+    geom_abline(intercept=0, slope=1)
+```
+
+## Fourier Series  
+
+Maximum K = m/2 where m is the number of seasonal periods.
+
+```{}
+fourier.beer <- tslm(beer2 ~ trend + fourier(beer2, K=2))
+summary(fourier.beer)
+```
+
+# Model Performance Evaluation  
+
+```{r}
+CV(fit.consMR)
+```
+
+## Best Subset Regression Model  
+
+We can run these subsets:  
+* backward selection - Start with all the predictors and remove each predictor one at a time. Keep new model if chosen measure of performance improved. Iterate until performance cannot be improved further.  
+* forward selection - Start with no predictors. Add one predictor at a time. Iterate until performance cannot improve any further.  
+* both - Combine backward and forward selection algorithms.  
+```{r}
+#only run on a dataframe object. Not time series object!
+uschange.df <- as.data.frame(uschange)
+
+fit.lm <- lm(Consumption ~., data=uschange.df)
+summary(fit.lm)
+
+step(fit.lm, direction = "forward")
+
+step(fit.lm, direction = "backward")
+
+step(fit.lm, direction = "both")
+```
+
+# Forecasting with Regression Models  
+
+Ex-ante forecast: Forecast made with whatever information available at the time of the forecast being made.    
+Ex-post forecast: Forecast made with later information on the predictors.  
+
+In the example below, we can deterministically figure out the trend. We also know the seasonal dummy variables. Hence, there is no difference in ex-ante and ex-post forecasting in this scenario.    
+
+```{r}
+beer2 <- window(ausbeer, start=1992)
+fit.beer <- tslm(beer2 ~ trend + season)
+fcast <- forecast(fit.beer)
+autoplot(fcast) +
+  ggtitle("Forecasts of beer production using regression") +
+  xlab("Year") + ylab("megalitres")
+```
+
+## Scenario Forecasting  
+
+```{r}
+fit.consBest <- tslm(
+  Consumption ~ Income + Savings + Unemployment,
+  data = uschange)
+h <- 4
+newdata <- data.frame(
+    Income = c(1, 1, 1, 1),
+    Savings = c(0.5, 0.5, 0.5, 0.5),
+    Unemployment = c(0, 0, 0, 0))
+fcast.up <- forecast(fit.consBest, newdata = newdata)
+newdata <- data.frame(
+    Income = rep(-1, h),
+    Savings = rep(-0.5, h),
+    Unemployment = rep(0, h))
+fcast.down <- forecast(fit.consBest, newdata = newdata)
+autoplot(uschange[, 1]) +
+  ylab("% change in US consumption") +
+  autolayer(fcast.up, PI = TRUE, series = "increase") +
+  autolayer(fcast.down, PI = TRUE, series = "decrease") +
+  guides(colour = guide_legend(title = "Scenario"))
+```
+
+# Nonlinear Regression  
+
+```{r}
+autoplot(marathon)
+fit.lin <- tslm(marathon ~ trend)
+autoplot(marathon) +
+  autolayer(fitted(fit.lin), series = "Linear")
+```
+
+```{r}
+checkresiduals(fit.lin)
+
+#Residuals vs. Predictor Plot
+df <- as.data.frame(marathon)
+colnames(df) <- "Time"
+df[,"Residuals"]  <- as.numeric(residuals(fit.lin))
+ggplot(df, aes(x=Time, y=Residuals)) +
+  geom_point()
+
+#Residuals vs. Fitted Values Plot 
+
+cbind(Fitted = fitted(fit.lin),
+      Residuals=residuals(fit.lin)) %>%
+  as.data.frame() %>%
+  ggplot(aes(x=Fitted, y=Residuals)) + geom_point()
+```
+
+What do these plots tell you about the residuals?  
+
+## Fitting an exponential trend  
+
+This requires doing a log transformation on the target (dependent) variable.  
+
+```{r}
+fit.exp <- tslm(marathon ~ trend, lambda = 0)
+
+autoplot(marathon) +
+  autolayer(fitted(fit.lin), series = "Linear") +
+  autolayer(fitted(fit.exp), series = "Exponential")
+```
+
+The log-linear model did not look much different but the forecasts are now decreasing at a decreasing rate.  
+
+```{r}
+h <- 10
+fcasts.lin <- forecast(fit.lin, h=h)
+fcasts.exp <- forecast(fit.exp, h=h)
+
+autoplot(marathon) +
+  autolayer(fitted(fit.lin), series = "Linear") +
+  autolayer(fcasts.lin, series="Linear", PI=FALSE)+
+  autolayer(fitted(fit.exp), series = "Exponential") +
+  autolayer(fcasts.exp, series="Exponential", PI=FALSE)+
+  xlab("Year") + ylab("Winning times in minutes") +
+  ggtitle("Boston Marathon") +
+  guides(colour = guide_legend(title = " "))
+```
+
+Can you check the residuals? How do they compare to the linear model?  
+
+## Regression Splines  
+
+We allow the slope to bend at various points in the time series. In essence, we are fitting several time series linear regression models with different trends.  
+
+Winning time was volatile until 1940. After that, it decreased in a linear fashion until 1980. The winning time seems flattened after 1980. 
+
+```{r}
+t <- time(marathon)
+t.break1 <- 1940
+t.break2 <- 1980
+tb1 <- ts(pmax(0, t - t.break1), start = 1897)
+tb2 <- ts(pmax(0, t - t.break2), start = 1897)
+
+fit.pw <- tslm(marathon ~ t + tb1 + tb2)
+t.new <- t[length(t)] + seq(h)
+tb1.new <- tb1[length(tb1)] + seq(h)
+tb2.new <- tb2[length(tb2)] + seq(h)
+
+newdata <- cbind(t=t.new, tb1=tb1.new, tb2=tb2.new) %>%
+  as.data.frame()
+fcasts.pw <- forecast(fit.pw, newdata = newdata)
+
+
+autoplot(marathon) +
+  autolayer(fitted(fit.lin), series = "Linear") +
+  autolayer(fitted(fit.exp), series = "Exponential") +
+  autolayer(fitted(fit.pw), series = "Piecewise") +
+  autolayer(fcasts.pw, series="Piecewise") +
+  autolayer(fcasts.lin, series="Linear", PI=FALSE) +
+  autolayer(fcasts.exp, series="Exponential", PI=FALSE) +
+  xlab("Year") + ylab("Winning times in minutes") +
+  ggtitle("Boston Marathon") +
+  guides(colour = guide_legend(title = " "))
+
+```
+
+We can make the "knots" look less abrupt by replacing the piecewise lines with piecewise cubics. It does a better job of fitting the historical time series but does not give as good of forecasting performance.  
+
+
+```{r}
+fit.spline <- tslm(marathon ~ t + I(t^2) + I(t^3) +
+  I(tb1^3) + I(tb2^3))
+fcasts.spl <- forecast(fit.spline, newdata = newdata)
+
+autoplot(marathon) +
+  autolayer(fitted(fit.lin), series = "Linear") +
+  autolayer(fitted(fit.exp), series = "Exponential") +
+  autolayer(fitted(fit.pw), series = "Piecewise") +
+  autolayer(fitted(fit.spline), series = "Cubic Spline") +
+  autolayer(fcasts.pw, series="Piecewise") +
+  autolayer(fcasts.lin, series="Linear", PI=FALSE) +
+  autolayer(fcasts.exp, series="Exponential", PI=FALSE) +
+  autolayer(fcasts.spl, series="Cubic Spline", PI=FALSE) +
+  xlab("Year") + ylab("Winning times in minutes") +
+  ggtitle("Boston Marathon") +
+  guides(colour = guide_legend(title = " "))
+
+```
+
+## Natural Cubic Smoothing Splines  
+
+This forces the cubic splines to be linear at both ends. The model gives better forecasts.  
+
+```{r}
+#notice we also log transformed the dependent variable (winning time) to stabilize the variance  
+marathon %>%
+  splinef(lambda=0) %>%
+  autoplot()
+
+marathon %>%
+  splinef(lambda=0) %>%
+  checkresiduals()
+```
+
+# Last Words  
+
+* Confounding factors/variables  
+* Multicollinearity

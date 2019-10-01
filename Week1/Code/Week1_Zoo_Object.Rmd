@@ -1,6 +1,8 @@
 ---
 title: "Week 1-Zoo"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 # Time Series using ZOO

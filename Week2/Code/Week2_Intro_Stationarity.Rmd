@@ -1,6 +1,8 @@
 ---
-title: "Week 2: Dissecting a Time Series"
-output: html_document
+title: 'Week 2: Dissecting a Time Series'
+output:
+  word_document: default
+  html_document: default
 ---
 
 # Time Series using ZOO

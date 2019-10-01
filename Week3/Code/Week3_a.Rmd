@@ -2,7 +2,9 @@
 title: 'Week 3: Smoothing, Part 1'
 author: "Xuan Pham"
 date: "9/3/2019"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 # Time Series Components

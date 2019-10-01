@@ -3,6 +3,7 @@ title: 'Module 4: Smoothing, Part 2'
 author: "Xuan Pham"
 date: "9/10/2019"
 output:
+  word_document: default
   html_document: default
 ---
 

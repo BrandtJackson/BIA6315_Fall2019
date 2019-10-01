@@ -2,7 +2,9 @@
 title: 'Week 5: ARIMA (Part 1)'
 author: "Xuan Pham"
 date: "9/17/2019"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
