@@ -73,11 +73,11 @@ cbind(Data = uschange[,"Consumption"],
 
 # Some Reminders  
 
-Things to always keep in mind when working with linear regression time series models.  
-* Errors (e_t) have mean zero or else the forecast is systematically biased.  
-* Errors are not autocorrelated or else forecast is systematically inefficient. 
-* Errors are uncorrelated with the predictor variables or else we are leaving out important patterns from our model.  
-* The regression model is estimated using Ordinary Least Squares (OLS), which is minimizing the sum of squared errors.  
+Things to always keep in mind when working with linear regression time series models.    
+*Errors (e_t) have mean zero or else the forecast is systematically biased.    
+*Errors are not autocorrelated or else forecast is systematically inefficient.   
+*Errors are uncorrelated with the predictor variables or else we are leaving out important patterns from our model.  
+*The regression model is estimated using Ordinary Least Squares (OLS), which is minimizing the sum of squared errors.    
 
 # Model Evaluation  
 
@@ -140,10 +140,10 @@ A linear trend can be included as a predictor.
 
 ## Dummy Variables  
 We can include dummy variables to account for:  
-* holidays 
-* outliers (a one time event)  
-* intervention/shock (one time event or lasting effect)  
-* seasonality  
+*holidays   
+*outliers (a one time event)    
+*intervention/shock (one time event or lasting effect)    
+*seasonality    
 
 A note about creating seasonality dummy variables. You should always do this calculation:  
 
@@ -181,11 +181,30 @@ cbind(Data=beer2, Fitted=fitted(fit.beer)) %>%
 
 Maximum K = m/2 where m is the number of seasonal periods.
 
-```{}
+```{r}
+t = seq(0,100,.05)
+y1 = sin(2*pi*t/4)
+y2 = cos(2*pi*t/4)
+y3 = sin(4*pi*t/4)
+y4 = cos(4*pi*t/4)
+par(mfrow=c(2,2))
+plot(t,y1,type="l",main="sin(2*pi*t/4)")
+plot(t,y2,type="l",main="cos(2*pi*t/4)")
+plot(t,y3,type="l",main="sin(4*pi*t/4)")
+plot(t,y4,type="l",main="cos(4*pi*t/4)")
+
+#Change the weights to combine the sine and cosine terms.
+par(mfrow=c(1,1))
+plot(t,.5*y1 + .4*y2 - .1*y3 + .0*y4,ylab="Combination",type="l",main="Combination of Fourier Terms")
+```
+
+
+```{r}
 fourier.beer <- tslm(beer2 ~ trend + fourier(beer2, K=2))
 summary(fourier.beer)
 ```
 
+Regression model with Fourier series is called a harmonic regression. 
 # Model Performance Evaluation  
 
 ```{r}
@@ -390,3 +409,4 @@ marathon %>%
 
 * Confounding factors/variables  
 * Multicollinearity
+
