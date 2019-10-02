@@ -177,6 +177,18 @@ cbind(Data=beer2, Fitted=fitted(fit.beer)) %>%
     geom_abline(intercept=0, slope=1)
 ```
 
+```{r}
+beer2 <- window(ausbeer, start=1992)
+df <- as.data.frame(beer2)
+df[,"Residuals"]  <- as.numeric(residuals(fit.beer))
+ggplot(df, aes(x=fit.beer$model$season, y=Residuals)) +
+  geom_point()
+
+df[,"Residuals"]  <- as.numeric(residuals(fit.beer))
+ggplot(df, aes(x=fit.beer$model$trend, y=Residuals)) +
+  geom_point()
+```
+
 ## Fourier Series  
 
 Maximum K = m/2 where m is the number of seasonal periods.
